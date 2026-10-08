@@ -503,5 +503,5 @@ def main():
 
 DATA_DIR_ARCHIVE = os.path.join(BASE_DIR, "data", "archive")
 
-if __name__ == "__&#8203;main__":
+if __name__ == "__main__":
     main()
