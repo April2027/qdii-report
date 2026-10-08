@@ -259,5 +259,5 @@ def main():
     return out
 
 
-if __name__ == "__&#8203;main__":
+if __name__ == "__main__":
     main()
