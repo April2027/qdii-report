@@ -606,7 +606,7 @@ svg{display:block;width:100%;height:auto}
   <div class="top">
     <div class="tnav">
       <a href="../index.html">‹ 返回早报</a>
-      <span class="sp"><a href="__SIB_URL__">切换到 __SIB_SHARE__ 份额 ›</a></span>
+      <span class="sp">__SIB_BTN__</span>
     </div>
     <div class="tname">__NAME__</div>
     <div class="tmeta">
@@ -893,10 +893,12 @@ def render_detail(fund, family_members, snapshot):
     """生成单只基金的详情页。familiy_members 为同系列全部成员（轻量）。"""
     others = [_light_fund(m) for m in family_members]
 
-    # 若没有 C 份额，按钮指向首页
+    # 若没有同系列份额，不显示切换按钮（避免无效入口）
     sib = next((m for m in others if m["code"] != fund["code"]), None)
-    sib_url = f"{sib['code']}.html" if sib else "../index.html"
-    sib_share = sib["share"] if sib else "其他"
+    if sib:
+        sib_btn = f'<a href="{sib["code"]}.html">切换到 {sib["share"]} 份额 ›</a>'
+    else:
+        sib_btn = '<a href="../index.html">查看全部基金 ›</a>'
 
     # 状态 pill
     if fund.get("status") == "on_sale":
@@ -923,8 +925,7 @@ def render_detail(fund, family_members, snapshot):
     html = html.replace("__CHG_BG__", chg_bg)
     html = html.replace("__CHG__", chg_txt)
     html = html.replace("__NAV_DATE__", fund.get("nav_date") or "—")
-    html = html.replace("__SIB_URL__", sib_url)
-    html = html.replace("__SIB_SHARE__", sib_share)
+    html = html.replace("__SIB_BTN__", sib_btn)
     html = html.replace("__GEN_TIME__", snapshot["generated_at"])
     html = html.replace("__FUND_JSON__", json.dumps(fund, ensure_ascii=False, separators=(",", ":")))
     html = html.replace("__ALL_JSON__", json.dumps(others, ensure_ascii=False, separators=(",", ":")))
