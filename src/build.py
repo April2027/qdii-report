@@ -151,6 +151,35 @@ body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .notice .txt{font-size:12.5px;color:#8a6321;line-height:1.55}
 .notice b{color:#c47f13}
 
+/* ---------- 净值日期分布提示 ---------- */
+.nd{
+  margin:10px 16px 0; border-radius:12px; padding:12px 14px;
+  display:flex; gap:10px; align-items:flex-start;
+}
+.nd-holiday{background:#fef2f2; border:1px solid #fcd5d5}
+.nd-mixed{background:#f5f7fa; border:1px solid #e4e8ee}
+.nd .nd-ico{flex:0 0 18px; font-size:15px; line-height:1.3}
+.nd-holiday .nd-ico{color:#d93025}
+.nd-mixed .nd-ico{color:#7b8794}
+.nd .nd-body{flex:1; min-width:0}
+.nd .nd-title{
+  font-size:13px; font-weight:700; line-height:1.45; margin-bottom:6px;
+}
+.nd-holiday .nd-title{color:#a81e16}
+.nd-mixed .nd-title{color:#4a5568}
+.nd .nd-line{font-size:12px; line-height:1.65; color:#5b6473; margin-top:4px}
+.nd .nd-line b{color:#1a1a1a; font-weight:600}
+.nd-holiday .nd-line b{color:#a81e16}
+/* 日期分布条 */
+.nd-dist{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+.nd-chip{
+  display:inline-flex; align-items:center; gap:5px; font-size:11px;
+  padding:3px 9px; border-radius:12px; background:#fff; border:1px solid #e4e8ee;
+  color:#5b6473; font-variant-numeric:tabular-nums;
+}
+.nd-chip.is-new{border-color:#f3b7b3; background:#fff5f4; color:#a81e16; font-weight:600}
+.nd-chip .n{opacity:.65}
+
 /* ---------- 通用区块 ---------- */
 .sec{padding:0 16px;margin-top:18px}
 .sec-hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;padding:0 2px;gap:8px}
@@ -284,6 +313,9 @@ body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
     </div>
   </div>
 
+  <!-- ============ 净值日期分布提示（日期不统一时显示） ============ -->
+  <div id="navDistBox"></div>
+
   <!-- ============ 海外指数看板 ============ -->
   <div class="sec">
     <div class="sec-hd"><h2>前夜海外市场</h2><span class="hint">__IDX_TIME__</span></div>
@@ -316,6 +348,29 @@ body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 <script>
 /* ================= 数据（内联，零请求） ================= */
 const SNAP = __DATA__;
+
+/* ================= 净值日期分布提示 ================= */
+(function renderNavDist(){
+  const box = document.getElementById('navDistBox');
+  const nd = SNAP.navDist;
+  if(!box || !nd || !nd.title) return;   // 日期统一时不显示
+
+  const chips = (nd.dist||[]).map((d,i)=>
+    `<span class="nd-chip${i===0?' is-new':''}">
+       ${d.date} <span class="n">${d.count}只</span>
+     </span>`).join('');
+
+  const icon = nd.kind === 'holiday' ? '!' : 'i';
+  box.innerHTML = `
+    <div class="nd nd-${nd.kind}">
+      <div class="nd-ico">${icon}</div>
+      <div class="nd-body">
+        <div class="nd-title">${esc(nd.title)}</div>
+        ${(nd.text||[]).map(t=>`<div class="nd-line">${t}</div>`).join('')}
+        <div class="nd-dist">${chips}</div>
+      </div>
+    </div>`;
+})();
 
 /* ================= 指数看板 ================= */
 (function renderIdx(){
@@ -860,6 +915,7 @@ def render_index(snapshot):
         "weekday": snapshot["weekday"],
         "generated_at": snapshot["generated_at"],
         "latest_nav_date": nav_date,
+        "navDist": snapshot.get("nav_dist"),
         "stats": st,
         "indexes": snapshot.get("indexes", []),
         "sections": [_light_section(s) for s in snapshot.get("sections", [])],
