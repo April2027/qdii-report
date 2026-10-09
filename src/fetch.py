@@ -210,6 +210,106 @@ def _summarize(items):
     }
 
 
+def _workdays_between(d1, d2):
+    """两个日期之间相隔的工作日数（不含 d1，含 d2）。"""
+    if d2 <= d1:
+        return 0
+    n, cur = 0, d1
+    while cur < d2:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5:
+            n += 1
+    return n
+
+
+def _analyze_nav_dates(items, now):
+    """
+    分析各基金的净值日期分布，判断是否需要提示「净值日滞后」。
+
+    返回：
+      {
+        "dist": [{"date": "2026-09-30", "count": 52, "gap_wd": 9}, ...],  # 按日期倒序
+        "newest": "2026-10-08",
+        "stale_count": 52,      # 非最新日期的基金数
+        "total": 54,
+        "mixed": True,          # 日期是否不统一
+        "stale_wd": 8,          # 最新日期距今天的工作日数（判断是否长假）
+        "kind": "holiday" | "normal",
+        "title": "...",         # 提示标题
+        "text": "..."           # 提示正文
+      }
+    """
+    from collections import Counter
+
+    cnt = Counter(x["nav_date"] for x in items if x.get("nav_date"))
+    if not cnt:
+        return None
+
+    today = now.date()
+    dist = []
+    for date_str, count in sorted(cnt.items(), reverse=True):
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        dist.append({
+            "date": date_str,
+            "count": count,
+            "gap_wd": _workdays_between(dt, today),
+        })
+    if not dist:
+        return None
+
+    total = sum(d["count"] for d in dist)
+    newest = dist[0]
+    stale_count = total - newest["count"]
+    mixed = len(dist) > 1
+
+    # ---- 判断是否处于「长假后 / 长期未披露」----
+    # 关键：看「滞后那批基金」距今天隔了多少工作日，而不是最新那批。
+    # 因为长假后会出现「少数已恢复 + 多数还停在节前」的混合状态。
+    lagging = [d for d in dist[1:]] or dist
+    lag_wd = max(d["gap_wd"] for d in lagging)
+    kind = "holiday" if lag_wd >= 3 else "normal"
+
+    # ---- 组装文案 ----
+    if kind == "holiday":
+        oldest = lagging[-1] if lagging else None
+        title = "部分基金净值停留在节前（长假后正常现象）"
+        lines = [
+            f"最新净值已到 <b>{newest['date']}</b>（{newest['count']} 只）；"
+            f"另有 <b>{stale_count}</b> 只仍为 <b>{oldest['date']}</b>（节前最后交易日）。",
+            "长假期间 A 股休市，基金公司<b>暂停申赎、不计提净值</b>，"
+            "所以即使海外市场照常交易，这些基金的净值也不披露。",
+            "节后复市起按 <b>T+2</b> 顺序陆续补出，通常 2~3 个工作日全部恢复，"
+            "届时本页会自动对齐。",
+        ]
+    elif mixed:
+        title = "各基金净值日期略有差异"
+        lines = [
+            f"最新净值为 <b>{newest['date']}</b>（{newest['count']} 只），"
+            f"另有 <b>{stale_count}</b> 只停留在更早日期。",
+            "场外 QDII 按 <b>T+2</b> 披露，不同基金公司公布节奏略有先后，"
+            "通常 1 个工作日内追平。",
+        ]
+    else:
+        title = None
+        lines = []
+
+    return {
+        "dist": dist,
+        "newest": newest["date"],
+        "stale_count": stale_count,
+        "total": total,
+        "mixed": mixed,
+        "lag_wd": lag_wd,
+        "kind": kind,
+        "title": title,
+        "text": lines,
+    }
+
+
+
 def build_snapshot():
     now = datetime.now(CST)
     funds_meta = ALL_FUNDS
@@ -343,6 +443,9 @@ def build_snapshot():
 
     nav_dates = sorted({x["nav_date"] for x in all_items if x["nav_date"]}, reverse=True)
 
+    # ---- 净值日期分布分析（用于页面提示「为何有些基金还停留在旧日期」）----
+    nav_dist = _analyze_nav_dates(all_items, now)
+
     snapshot = {
         "version": 2,
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -350,6 +453,7 @@ def build_snapshot():
         "weekday": "一二三四五六日"[now.weekday()],
         "nav_dates": nav_dates[:6],
         "latest_nav_date": nav_dates[0] if nav_dates else None,
+        "nav_dist": nav_dist,
         "stats": overall,
         "indexes": indexes,
         "sections": sections,
